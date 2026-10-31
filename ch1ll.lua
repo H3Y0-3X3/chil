@@ -1,6 +1,8 @@
 --!nocheck
 -- ============================================================
--- H3Y0 CH1LL Universal Hub v2
+-- H3Y0 CH1LL Universal Hub v3 (полный, самодостаточный)
+-- ============================================================
+-- Открыть меню: RightControl / Insert
 -- ============================================================
 
 -- ============================================================
@@ -14,16 +16,15 @@ control = { status = 'starting', started = os.clock() }
 if getgenv then getgenv()['H3Y0 CH1LL'] = control end
 
 -- ============================================================
--- СЕКЦИЯ 2: СЕРВИСЫ
+-- СЕКЦИЯ 2: СЕРВИСЫ И УТИЛИТЫ
 -- ============================================================
 local Players = cloneref and cloneref(game:GetService('Players')) or game:GetService('Players')
 local RunService = cloneref and cloneref(game:GetService('RunService')) or game:GetService('RunService')
 local UIS = cloneref and cloneref(game:GetService('UserInputService')) or game:GetService('UserInputService')
-local HttpService = cloneref and cloneref(game:GetService('HttpService')) or game:GetService('HttpService')
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
 local function safeCall(fn, ...)
+    if type(fn) ~= 'function' then return end
     local ok, res = pcall(fn, ...)
     if not ok then warn('[H3Y0 CH1LL] ' .. tostring(res)) end
     return ok, res
@@ -34,8 +35,16 @@ local function silentSet(inst, prop, value)
     pcall(function() inst[prop] = value end)
 end
 
+local function getGuiParent()
+    if gethui then
+        local ok, res = pcall(gethui)
+        if ok and res then return res end
+    end
+    return game:GetService('CoreGui')
+end
+
 -- ============================================================
--- СЕКЦИЯ 3: LIBRARY
+-- СЕКЦИЯ 3: LIBRARY (базовые стили + ScreenGui)
 -- ============================================================
 local Library = {}
 Library.Font = Enum.Font.Gotham
@@ -47,7 +56,6 @@ Library.OutlineColor = Color3.fromHex('212121')
 Library.FontColor = Color3.fromHex('ffffff')
 Library.Toggles = {}
 Library.Options = {}
-Library.ScreenGui = nil
 
 local function Create(class, props)
     local inst = Instance.new(class)
@@ -67,33 +75,30 @@ local function CreateLabel(props)
     return lbl
 end
 
-do
-    local coreGui = gethui and gethui() or game:GetService('CoreGui')
-    Library.ScreenGui = Create('ScreenGui', {
-        Name = 'H3Y0_CH1LL',
-        ZIndexBehavior = Enum.ZIndexBehavior.Global,
-        ResetOnSpawn = false,
-        IgnoreGuiInset = true,
-        DisplayOrder = 100,
-        Parent = coreGui,
-    })
-end
+Library.ScreenGui = Create('ScreenGui', {
+    Name = 'H3Y0_CH1LL',
+    ZIndexBehavior = Enum.ZIndexBehavior.Global,
+    ResetOnSpawn = false,
+    IgnoreGuiInset = true,
+    DisplayOrder = 100,
+    Parent = getGuiParent(),
+})
 
 -- ============================================================
--- СЕКЦИЯ 4: WINDOW
+-- СЕКЦИЯ 4: WINDOW (главное окно + перетаскивание)
 -- ============================================================
 local MainFrame = Create('Frame', {
     Name = 'MainFrame',
     AnchorPoint = Vector2.new(0.5, 0.5),
     Position = UDim2.fromScale(0.5, 0.5),
-    Size = UDim2.fromOffset(560, 400),
+    Size = UDim2.fromOffset(580, 420),
     BackgroundColor3 = Library.MainColor,
     BorderSizePixel = 0,
     Visible = false,
     Parent = Library.ScreenGui,
 })
-local stroke = Instance.new('UIStroke', MainFrame)
-stroke.Color = Library.OutlineColor
+local mainStroke = Instance.new('UIStroke', MainFrame)
+mainStroke.Color = Library.OutlineColor
 
 CreateLabel({
     Text = 'H3Y0 CH1LL',
@@ -105,7 +110,8 @@ CreateLabel({
 })
 
 local CloseBtn = Create('TextButton', {
-    Text = '✕',
+    Text = 'X',
+    Font = Library.Font,
     TextSize = 14,
     TextColor3 = Library.FontColor,
     BackgroundTransparency = 1,
@@ -115,29 +121,36 @@ local CloseBtn = Create('TextButton', {
 })
 CloseBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false end)
 
--- Перетаскивание
+-- Перетаскивание окна
 do
-    local dragging, dragInput, dragStart, startPos
+    local dragging = false
+    local dragStart, startPos
     MainFrame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true; dragStart = input.Position; startPos = MainFrame.Position
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
         end
     end)
-    MainFrame.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
-    end)
     UIS.InputChanged:Connect(function(input)
-        if dragging and input == dragInput then
-            local d = input.Position - dragStart
-            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            MainFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
         end
     end)
     UIS.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
     end)
 end
 
--- Переключение меню
+-- Открытие/закрытие меню
 UIS.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.RightControl or input.KeyCode == Enum.KeyCode.Insert then
@@ -145,6 +158,7 @@ UIS.InputBegan:Connect(function(input, gp)
     end
 end)
 
+-- Панели
 local TabPanel = Create('Frame', {
     BackgroundColor3 = Library.BackgroundColor,
     Position = UDim2.new(0, 8, 0, 36),
@@ -160,121 +174,204 @@ local ContentPanel = Create('Frame', {
 })
 
 -- ============================================================
--- СЕКЦИЯ 5: TABS + GROUPBOX
+-- СЕКЦИЯ 5: TABS
 -- ============================================================
 local Tabs = {}
+local ActiveTab = nil
+
 local function AddTab(name)
     local btn = Create('TextButton', {
-        Text = name, Font = Library.Font, TextSize = 13,
-        TextColor3 = Color3.fromRGB(180,180,180),
+        Text = name,
+        Font = Library.Font,
+        TextSize = 13,
+        TextColor3 = Color3.fromRGB(180, 180, 180),
         BackgroundTransparency = 1,
         Size = UDim2.new(1, -8, 0, 26),
         Parent = TabPanel,
     })
     local content = Create('Frame', {
-        BackgroundTransparency = 1, Size = UDim2.fromScale(1,1), Visible = false, Parent = ContentPanel,
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1),
+        Visible = false,
+        Parent = ContentPanel,
     })
     local left = Create('ScrollingFrame', {
-        BackgroundTransparency = 1, Size = UDim2.new(0.5, -6, 1, 0),
-        ScrollBarThickness = 3, AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = content,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.5, -6, 1, 0),
+        ScrollBarThickness = 3,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Parent = content,
     })
     local right = Create('ScrollingFrame', {
-        BackgroundTransparency = 1, Position = UDim2.new(0.5, 6, 0, 0),
-        Size = UDim2.new(0.5, -6, 1, 0), ScrollBarThickness = 3,
-        AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = content,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0.5, 6, 0, 0),
+        Size = UDim2.new(0.5, -6, 1, 0),
+        ScrollBarThickness = 3,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Parent = content,
     })
-    local ll = Instance.new('UIListLayout', left); ll.Padding = UDim.new(0, 8)
-    local rl = Instance.new('UIListLayout', right); rl.Padding = UDim.new(0, 8)
+    local ll = Instance.new('UIListLayout', left)
+    ll.Padding = UDim.new(0, 8)
+    local rl = Instance.new('UIListLayout', right)
+    rl.Padding = UDim.new(0, 8)
 
-    local tab = { Btn = btn, Content = content, Left = left, Right = right }
+    local tab = {
+        Btn = btn,
+        Content = content,
+        Left = left,
+        Right = right,
+    }
+
     btn.MouseButton1Click:Connect(function()
-        for _, t in pairs(Tabs) do
+        for _, t in ipairs(Tabs) do
             t.Content.Visible = false
-            t.Btn.TextColor3 = Color3.fromRGB(180,180,180)
+            t.Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
         end
         content.Visible = true
         btn.TextColor3 = Library.AccentColor
+        ActiveTab = tab
     end)
+
     table.insert(Tabs, tab)
     return tab
 end
 
+-- ============================================================
+-- СЕКЦИЯ 6: GROUPBOX
+-- ============================================================
 local function AddGroupbox(tab, side, name)
+    local parent = side == 'Left' and tab.Left or tab.Right
     local holder = Create('Frame', {
-        BackgroundTransparency = 1, Size = UDim2.new(1,0,0,0),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
-        Parent = side == 'Left' and tab.Left or tab.Right,
+        Parent = parent,
     })
     CreateLabel({
-        Text = name, TextSize = 12, TextColor3 = Color3.fromRGB(200,200,200),
-        Size = UDim2.new(1,0,0,16), Parent = holder,
+        Text = name,
+        TextSize = 12,
+        TextColor3 = Color3.fromRGB(200, 200, 200),
+        Size = UDim2.new(1, 0, 0, 16),
+        Parent = holder,
     })
     local container = Create('Frame', {
         BackgroundColor3 = Library.BackgroundColor,
-        Position = UDim2.new(0,0,0,18), Size = UDim2.new(1,0,0,0),
-        AutomaticSize = Enum.AutomaticSize.Y, Parent = holder,
+        Position = UDim2.new(0, 0, 0, 18),
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Parent = holder,
     })
-    local s = Instance.new('UIStroke', container); s.Color = Library.OutlineColor
+    local s = Instance.new('UIStroke', container)
+    s.Color = Library.OutlineColor
     local p = Instance.new('UIPadding', container)
-    p.PaddingTop = UDim.new(0,4); p.PaddingBottom = UDim.new(0,4)
-    p.PaddingLeft = UDim.new(0,4); p.PaddingRight = UDim.new(0,4)
-    local l = Instance.new('UIListLayout', container); l.Padding = UDim.new(0,4)
-    return { Container = container }
+    p.PaddingTop = UDim.new(0, 4)
+    p.PaddingBottom = UDim.new(0, 4)
+    p.PaddingLeft = UDim.new(0, 4)
+    p.PaddingRight = UDim.new(0, 4)
+    local l = Instance.new('UIListLayout', container)
+    l.Padding = UDim.new(0, 4)
+    return { Container = container, Holder = holder }
 end
 
 -- ============================================================
 -- СЕКЦИЯ 7: КОМПОНЕНТЫ
 -- ============================================================
+
+-- Toggle
 local function AddToggle(groupbox, idx, opts)
+    opts = opts or {}
     local frame = Create('Frame', {
-        BackgroundTransparency = 1, Size = UDim2.new(1,0,0,22), Parent = groupbox.Container,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 22),
+        Parent = groupbox.Container,
     })
-    CreateLabel({ Text = opts.Text or idx, Size = UDim2.new(1,-30,1,0), Parent = frame })
+    CreateLabel({
+        Text = opts.Text or idx,
+        Size = UDim2.new(1, -30, 1, 0),
+        Parent = frame,
+    })
     local box = Create('Frame', {
         BackgroundColor3 = Library.BackgroundColor,
-        Position = UDim2.new(1,-20,0.5,-8), Size = UDim2.fromOffset(16,16), Parent = frame,
+        Position = UDim2.new(1, -20, 0.5, -8),
+        Size = UDim2.fromOffset(16, 16),
+        Parent = frame,
     })
-    local bs = Instance.new('UIStroke', box); bs.Color = Library.OutlineColor
+    local bs = Instance.new('UIStroke', box)
+    bs.Color = Library.OutlineColor
     local fill = Create('Frame', {
         BackgroundColor3 = Library.AccentColor,
-        Position = UDim2.fromOffset(3,3), Size = UDim2.fromOffset(10,10),
-        Visible = false, Parent = box,
+        Position = UDim2.fromOffset(3, 3),
+        Size = UDim2.fromOffset(10, 10),
+        Visible = false,
+        Parent = box,
     })
-    local value = opts.Default or false
+    local value = opts.Default and true or false
     local function update()
         fill.Visible = value
         if opts.Callback then safeCall(opts.Callback, value) end
     end
     local btn = Create('TextButton', {
-        Text = '', BackgroundTransparency = 1, Size = UDim2.fromScale(1,1), Parent = frame,
+        Text = '',
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1),
+        Parent = frame,
     })
-    btn.MouseButton1Click:Connect(function() value = not value; update() end)
-    local toggle = { Value = value, SetValue = function(v) value = v; update() end }
+    btn.MouseButton1Click:Connect(function()
+        value = not value
+        update()
+    end)
+    local toggle = {
+        Value = value,
+        SetValue = function(v) value = v; update() end,
+        GetValue = function() return value end,
+    }
     Library.Toggles[idx] = toggle
-    if opts.Default then update() end
+    if value then update() end
     return toggle
 end
 
+-- Slider
 local function AddSlider(groupbox, idx, opts)
+    opts = opts or {}
     local frame = Create('Frame', {
-        BackgroundTransparency = 1, Size = UDim2.new(1,0,0,36), Parent = groupbox.Container,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 36),
+        Parent = groupbox.Container,
     })
-    CreateLabel({ Text = opts.Text or idx, Size = UDim2.new(1,-40,0,16), Parent = frame })
+    CreateLabel({
+        Text = opts.Text or idx,
+        Size = UDim2.new(1, -40, 0, 16),
+        Parent = frame,
+    })
     local valLabel = CreateLabel({
         Text = tostring(opts.Default or opts.Min or 0),
-        Size = UDim2.new(0,40,0,16), Position = UDim2.new(1,-40,0,0),
-        TextXAlignment = Enum.TextXAlignment.Right, Parent = frame,
+        Size = UDim2.new(0, 40, 0, 16),
+        Position = UDim2.new(1, -40, 0, 0),
+        TextXAlignment = Enum.TextXAlignment.Right,
+        Parent = frame,
     })
     local bar = Create('Frame', {
         BackgroundColor3 = Library.OutlineColor,
-        Position = UDim2.new(0,0,0,22), Size = UDim2.new(1,0,0,4), Parent = frame,
+        Position = UDim2.new(0, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 4),
+        Parent = frame,
     })
-    local fill = Create('Frame', { BackgroundColor3 = Library.AccentColor, Size = UDim2.new(0,0,1,0), Parent = bar })
+    local fill = Create('Frame', {
+        BackgroundColor3 = Library.AccentColor,
+        Size = UDim2.new(0, 0, 1, 0),
+        Parent = bar,
+    })
     local knob = Create('Frame', {
-        BackgroundColor3 = Library.AccentColor, AnchorPoint = Vector2.new(0.5,0.5),
-        Position = UDim2.new(0,0,0.5,0), Size = UDim2.fromOffset(10,10), Parent = bar,
+        BackgroundColor3 = Library.AccentColor,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0, 0, 0.5, 0),
+        Size = UDim2.fromOffset(10, 10),
+        Parent = bar,
     })
-    local minV, maxV = opts.Min or 0, opts.Max or 100
+    local minV = opts.Min or 0
+    local maxV = opts.Max or 100
     local value = opts.Default or minV
     local function update()
         local a = (value - minV) / (maxV - minV)
@@ -284,68 +381,117 @@ local function AddSlider(groupbox, idx, opts)
         if opts.Callback then safeCall(opts.Callback, value) end
     end
     local btn = Create('TextButton', {
-        Text = '', BackgroundTransparency = 1, Size = UDim2.new(1,0,0,20),
-        Position = UDim2.new(0,0,0,16), Parent = frame,
+        Text = '',
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 20),
+        Position = UDim2.new(0, 0, 0, 16),
+        Parent = frame,
     })
     local dragging = false
     btn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+        end
     end)
     UIS.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
     end)
     UIS.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
             local rel = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
             value = math.floor(minV + rel * (maxV - minV) + 0.5)
             update()
         end
     end)
     update()
-    local slider = { Value = value, SetValue = function(v) value = v; update() end }
+    local slider = {
+        Value = value,
+        SetValue = function(v) value = v; update() end,
+        GetValue = function() return value end,
+    }
     Library.Options[idx] = slider
     return slider
 end
 
+-- Button
 local function AddButton(groupbox, opts)
+    opts = opts or {}
     local btn = Create('TextButton', {
-        Text = opts.Text or 'Button', Font = Library.Font, TextSize = 13,
-        TextColor3 = Library.FontColor, BackgroundColor3 = Library.BackgroundColor,
-        Size = UDim2.new(1,0,0,24), Parent = groupbox.Container,
+        Text = opts.Text or 'Button',
+        Font = Library.Font,
+        TextSize = 13,
+        TextColor3 = Library.FontColor,
+        BackgroundColor3 = Library.BackgroundColor,
+        Size = UDim2.new(1, 0, 0, 24),
+        Parent = groupbox.Container,
     })
-    local s = Instance.new('UIStroke', btn); s.Color = Library.OutlineColor
+    local s = Instance.new('UIStroke', btn)
+    s.Color = Library.OutlineColor
     btn.MouseButton1Click:Connect(function()
         if opts.Func then safeCall(opts.Func) end
     end)
     return btn
 end
 
+-- Textbox
 local function AddTextbox(groupbox, idx, opts)
+    opts = opts or {}
     local frame = Create('Frame', {
-        BackgroundTransparency = 1, Size = UDim2.new(1,0,0,38), Parent = groupbox.Container,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 38),
+        Parent = groupbox.Container,
     })
-    CreateLabel({ Text = opts.Text or idx, Size = UDim2.new(1,0,0,14), Parent = frame })
+    CreateLabel({
+        Text = opts.Text or idx,
+        Size = UDim2.new(1, 0, 0, 14),
+        Parent = frame,
+    })
     local box = Create('TextBox', {
-        Text = opts.Default or '', PlaceholderText = opts.Placeholder or '',
-        Font = Library.Font, TextSize = 13, TextColor3 = Library.FontColor,
+        Text = opts.Default or '',
+        PlaceholderText = opts.Placeholder or '',
+        Font = Library.Font,
+        TextSize = 13,
+        TextColor3 = Library.FontColor,
         BackgroundColor3 = Library.BackgroundColor,
-        Position = UDim2.new(0,0,0,16), Size = UDim2.new(1,0,0,20),
-        ClearTextOnFocus = false, Parent = frame,
+        Position = UDim2.new(0, 0, 0, 16),
+        Size = UDim2.new(1, 0, 0, 20),
+        ClearTextOnFocus = false,
+        Parent = frame,
     })
-    local s = Instance.new('UIStroke', box); s.Color = Library.OutlineColor
+    local s = Instance.new('UIStroke', box)
+    s.Color = Library.OutlineColor
     box.FocusLost:Connect(function()
         if opts.Callback then safeCall(opts.Callback, box.Text) end
     end)
-    local tb = { Value = box.Text, SetValue = function(v) box.Text = v; tb.Value = v end }
+    local tb = {
+        Value = box.Text,
+        SetValue = function(v) box.Text = v; tb.Value = v end,
+        GetValue = function() return box.Text end,
+    }
     Library.Options[idx] = tb
     return tb
 end
 
--- ============================================================
--- СЕКЦИЯ 10: МОДУЛИ
--- ============================================================
+-- Label
+local function AddLabel(groupbox, text)
+    return CreateLabel({
+        Text = text,
+        TextSize = 12,
+        TextColor3 = Color3.fromRGB(200, 200, 200),
+        Size = UDim2.new(1, 0, 0, 18),
+        TextWrapped = true,
+        Parent = groupbox.Container,
+    })
+end
 
--- ---------- FLY ----------
+-- ============================================================
+-- СЕКЦИЯ 8: МОДУЛЬ FLY
+-- ============================================================
 local Fly = { Enabled = false, Speed = 50, _bv = nil, _bg = nil, _conn = nil }
 function Fly:Enable()
     if self.Enabled then return end
@@ -356,10 +502,10 @@ function Fly:Enable()
     if not hrp or not hum then return end
     hum.PlatformStand = true
     self._bv = Instance.new('BodyVelocity', hrp)
-    self._bv.MaxForce = Vector3.new(4000,4000,4000)
+    self._bv.MaxForce = Vector3.new(4000, 4000, 4000)
     self._bv.Velocity = Vector3.zero
     self._bg = Instance.new('BodyGyro', hrp)
-    self._bg.MaxTorque = Vector3.new(4000,4000,4000)
+    self._bg.MaxTorque = Vector3.new(4000, 4000, 4000)
     self._bg.P = 3000
     self._conn = RunService.RenderStepped:Connect(function()
         if not self.Enabled then return end
@@ -373,8 +519,8 @@ function Fly:Enable()
         if UIS:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
         if UIS:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
         if UIS:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
-        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then move -= Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then move -= Vector3.new(0, 1, 0) end
         self._bv.Velocity = move.Magnitude > 0 and move.Unit * self.Speed or Vector3.zero
         self._bg.CFrame = cam.CFrame
     end)
@@ -392,7 +538,9 @@ function Fly:Disable()
     end
 end
 
--- ---------- SPEED ----------
+-- ============================================================
+-- СЕКЦИЯ 9: МОДУЛЬ SPEED
+-- ============================================================
 local Speed = { Enabled = false, _conn = nil, _target = 16, _current = 16 }
 function Speed:Enable()
     if self.Enabled then return end
@@ -418,10 +566,18 @@ function Speed:Disable()
     end
 end
 
--- ---------- BHOP (разгон, не автопрыжок) ----------
+-- ============================================================
+-- СЕКЦИЯ 10: МОДУЛЬ BHOP (разгон)
+-- ============================================================
 local Bhop = {
-    Enabled = false, Gain = 0.5, Friction = 0.98, MaxSpeed = 120,
-    AutoJump = true, Preserve = true, _conn = nil, _wasAir = false,
+    Enabled = false,
+    Gain = 0.5,
+    Friction = 0.98,
+    MaxSpeed = 120,
+    AutoJump = true,
+    Preserve = true,
+    _conn = nil,
+    _wasAir = false,
 }
 function Bhop:Enable()
     if self.Enabled then return end
@@ -440,16 +596,20 @@ function Bhop:Enable()
         if inAir then
             if speed > 0.5 and speed < self.MaxSpeed then
                 local newSpeed = math.min(speed + self.Gain * (dt * 60), self.MaxSpeed)
-                hrp.AssemblyLinearVelocity = Vector3.new(hvel.Unit.X * newSpeed, v.Y, hvel.Unit.Z * newSpeed)
+                local dir = hvel.Unit
+                hrp.AssemblyLinearVelocity = Vector3.new(dir.X * newSpeed, v.Y, dir.Z * newSpeed)
             end
             self._wasAir = true
         else
             if self._wasAir and self.Preserve and speed > 0.5 then
                 local kept = math.min(speed * self.Friction, self.MaxSpeed)
-                hrp.AssemblyLinearVelocity = Vector3.new(hvel.Unit.X * kept, v.Y, hvel.Unit.Z * kept)
+                local dir = hvel.Unit
+                hrp.AssemblyLinearVelocity = Vector3.new(dir.X * kept, v.Y, dir.Z * kept)
             end
             self._wasAir = false
-            if self.AutoJump and UIS:IsKeyDown(Enum.KeyCode.Space) then hum.Jump = true end
+            if self.AutoJump and UIS:IsKeyDown(Enum.KeyCode.Space) then
+                hum.Jump = true
+            end
         end
     end)
 end
@@ -459,7 +619,9 @@ function Bhop:Disable()
     self._wasAir = false
 end
 
--- ---------- NOCLIP ----------
+-- ============================================================
+-- СЕКЦИЯ 11: МОДУЛЬ NOCLIP
+-- ============================================================
 local Noclip = { Enabled = false, _conn = nil }
 function Noclip:Enable()
     if self.Enabled then return end
@@ -469,7 +631,9 @@ function Noclip:Enable()
         local char = LocalPlayer.Character
         if not char then return end
         for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA('BasePart') then part.CanCollide = false end
+            if part:IsA('BasePart') then
+                part.CanCollide = false
+            end
         end
     end)
 end
@@ -478,7 +642,9 @@ function Noclip:Disable()
     if self._conn then self._conn:Disconnect(); self._conn = nil end
 end
 
--- ---------- SPINBOT ----------
+-- ============================================================
+-- СЕКЦИЯ 12: МОДУЛЬ SPINBOT
+-- ============================================================
 local SpinBot = { Enabled = false, Speed = 10, _conn = nil, _angle = 0 }
 function SpinBot:Enable()
     if self.Enabled then return end
@@ -499,7 +665,7 @@ function SpinBot:Disable()
 end
 
 -- ============================================================
--- СЕКЦИЯ 11: ESP (полноценный)
+-- СЕКЦИЯ 13: МОДУЛЬ ESP
 -- ============================================================
 local ESP = {
     Enabled = false,
@@ -508,154 +674,161 @@ local ESP = {
     Health = true,
     Distance = true,
     MaxDistance = 1000,
-    _drawings = {},   -- [player] = {Box, Name, HealthBg, HealthFg, Distance}
+    _drawings = {},
     _conn = nil,
+    _available = (Drawing ~= nil),
 }
 
-local function createDrawingsForPlayer(player)
-    if player == LocalPlayer then return nil end
-    local d = {}
-    d.Box = Drawing.new('Square')
+if not ESP._available then
+    warn('[H3Y0 CH1LL] Drawing недоступен — ESP отключён.')
+end
+
+local function createDrawings()
+    return {
+        Box = Drawing.new('Square'),
+        Name = Drawing.new('Text'),
+        HealthBg = Drawing.new('Square'),
+        HealthFg = Drawing.new('Square'),
+        Distance = Drawing.new('Text'),
+    }
+end
+
+local function initDrawings(d)
     d.Box.Thickness = 1
     d.Box.Color = Color3.fromRGB(162, 205, 255)
     d.Box.Filled = false
     d.Box.Visible = false
 
-    d.Name = Drawing.new('Text')
     d.Name.Size = 13
-    d.Name.Color = Color3.fromRGB(255,255,255)
+    d.Name.Color = Color3.fromRGB(255, 255, 255)
     d.Name.Center = true
     d.Name.Outline = true
     d.Name.Visible = false
 
-    d.HealthBg = Drawing.new('Square')
     d.HealthBg.Thickness = 1
-    d.HealthBg.Color = Color3.fromRGB(0,0,0)
+    d.HealthBg.Color = Color3.fromRGB(0, 0, 0)
     d.HealthBg.Filled = true
     d.HealthBg.Visible = false
 
-    d.HealthFg = Drawing.new('Square')
     d.HealthFg.Thickness = 1
-    d.HealthFg.Color = Color3.fromRGB(0,255,0)
+    d.HealthFg.Color = Color3.fromRGB(0, 255, 0)
     d.HealthFg.Filled = true
     d.HealthFg.Visible = false
 
-    d.Distance = Drawing.new('Text')
     d.Distance.Size = 11
-    d.Distance.Color = Color3.fromRGB(180,180,180)
+    d.Distance.Color = Color3.fromRGB(180, 180, 180)
     d.Distance.Center = true
     d.Distance.Outline = true
     d.Distance.Visible = false
-
-    return d
 end
 
-local function removeDrawingsForPlayer(player)
-    local d = ESP._drawings[player]
+local function hideDrawings(d)
     if not d then return end
-    for _, obj in pairs(d) do
-        pcall(function() obj:Remove() end)
-    end
-    ESP._drawings[player] = nil
+    for _, obj in pairs(d) do pcall(function() obj.Visible = false end) end
+end
+
+local function destroyDrawings(d)
+    if not d then return end
+    for _, obj in pairs(d) do pcall(function() obj:Remove() end) end
 end
 
 local function updateESP()
+    if not ESP._available then return end
     if not ESP.Enabled then
-        for _, d in pairs(ESP._drawings) do
-            for _, obj in pairs(d) do pcall(function() obj.Visible = false end) end
-        end
+        for _, d in pairs(ESP._drawings) do hideDrawings(d) end
         return
     end
 
+    local cam = workspace.CurrentCamera
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then
-            removeDrawingsForPlayer(player)
-            goto continue
-        end
-        local char = player.Character
-        local hum = char and char:FindFirstChildOfClass('Humanoid')
-        local hrp = char and char:FindFirstChild('HumanoidRootPart')
-        if not hum or not hrp or hum.Health <= 0 then
             if ESP._drawings[player] then
-                for _, obj in pairs(ESP._drawings[player]) do pcall(function() obj.Visible = false end) end
+                destroyDrawings(ESP._drawings[player])
+                ESP._drawings[player] = nil
             end
-            goto continue
-        end
+        else
+            local char = player.Character
+            local hum = char and char:FindFirstChildOfClass('Humanoid')
+            local hrp = char and char:FindFirstChild('HumanoidRootPart')
+            local ok = hum and hrp and hum.Health > 0
 
-        local dist = (Camera.CFrame.Position - hrp.Position).Magnitude
-        if dist > ESP.MaxDistance then
-            if ESP._drawings[player] then
-                for _, obj in pairs(ESP._drawings[player]) do pcall(function() obj.Visible = false end) end
+            if ok then
+                local dist = (cam.CFrame.Position - hrp.Position).Magnitude
+                if dist > ESP.MaxDistance then ok = false end
             end
-            goto continue
-        end
 
-        local headPos = hrp.Position + Vector3.new(0, 1.5, 0)
-        local legPos = hrp.Position - Vector3.new(0, 3, 0)
-        local headScreen, headOn = Camera:WorldToViewportPoint(headPos)
-        local legScreen, legOn = Camera:WorldToViewportPoint(legPos)
+            if ok then
+                local headScreen, headOn = cam:WorldToViewportPoint(hrp.Position + Vector3.new(0, 1.5, 0))
+                local legScreen, legOn = cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                if headOn and legOn then
+                    if not ESP._drawings[player] then
+                        local d = createDrawings()
+                        initDrawings(d)
+                        ESP._drawings[player] = d
+                    end
+                    local d = ESP._drawings[player]
+                    local h = math.abs(legScreen.Y - headScreen.Y)
+                    local w = h * 0.55
+                    local x = headScreen.X - w / 2
+                    local y = headScreen.Y
 
-        if not (headOn and legOn) then
-            if ESP._drawings[player] then
-                for _, obj in pairs(ESP._drawings[player]) do pcall(function() obj.Visible = false end) end
+                    -- Box
+                    d.Box.Visible = ESP.Box
+                    if ESP.Box then
+                        d.Box.Size = Vector2.new(w, h)
+                        d.Box.Position = Vector2.new(x, y)
+                    end
+
+                    -- Name
+                    d.Name.Visible = ESP.Name
+                    if ESP.Name then
+                        d.Name.Text = player.Name
+                        d.Name.Position = Vector2.new(x + w / 2, y - 14)
+                    end
+
+                    -- Health
+                    d.HealthBg.Visible = ESP.Health
+                    d.HealthFg.Visible = ESP.Health
+                    if ESP.Health then
+                        local hp = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
+                        local barH = h
+                        local barW = 3
+                        local bx = x - 6
+                        d.HealthBg.Size = Vector2.new(barW, barH)
+                        d.HealthBg.Position = Vector2.new(bx, y)
+                        local fgH = barH * hp
+                        d.HealthFg.Size = Vector2.new(barW, fgH)
+                        d.HealthFg.Position = Vector2.new(bx, y + (barH - fgH))
+                        if hp > 0.5 then
+                            d.HealthFg.Color = Color3.fromRGB(0, 255, 0)
+                        elseif hp > 0.25 then
+                            d.HealthFg.Color = Color3.fromRGB(255, 255, 0)
+                        else
+                            d.HealthFg.Color = Color3.fromRGB(255, 0, 0)
+                        end
+                    end
+
+                    -- Distance
+                    d.Distance.Visible = ESP.Distance
+                    if ESP.Distance then
+                        d.Distance.Text = string.format('[%d]', math.floor(dist))
+                        d.Distance.Position = Vector2.new(x + w / 2, y + h + 2)
+                    end
+                else
+                    hideDrawings(ESP._drawings[player])
+                end
+            else
+                hideDrawings(ESP._drawings[player])
             end
-            goto continue
         end
-
-        local h = math.abs(legScreen.Y - headScreen.Y)
-        local w = h * 0.55
-        local x = headScreen.X - w / 2
-        local y = headScreen.Y
-
-        if not ESP._drawings[player] then
-            ESP._drawings[player] = createDrawingsForPlayer(player)
-        end
-        local d = ESP._drawings[player]
-        if not d then goto continue end
-
-        -- Box
-        d.Box.Visible = ESP.Box
-        if ESP.Box then
-            d.Box.Size = Vector2.new(w, h)
-            d.Box.Position = Vector2.new(x, y)
-        end
-
-        -- Name
-        d.Name.Visible = ESP.Name
-        if ESP.Name then
-            d.Name.Text = player.Name
-            d.Name.Position = Vector2.new(x + w / 2, y - 14)
-        end
-
-        -- Health bar
-        d.HealthBg.Visible = ESP.Health
-        d.HealthFg.Visible = ESP.Health
-        if ESP.Health then
-            local hp = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
-            local barH = h
-            local barW = 3
-            local bx = x - 6
-            d.HealthBg.Size = Vector2.new(barW, barH)
-            d.HealthBg.Position = Vector2.new(bx, y)
-            local fgH = barH * hp
-            d.HealthFg.Size = Vector2.new(barW, fgH)
-            d.HealthFg.Position = Vector2.new(bx, y + (barH - fgH))
-            local col = hp > 0.5 and Color3.fromRGB(0,255,0) or (hp > 0.25 and Color3.fromRGB(255,255,0) or Color3.fromRGB(255,0,0))
-            d.HealthFg.Color = col
-        end
-
-        -- Distance
-        d.Distance.Visible = ESP.Distance
-        if ESP.Distance then
-            d.Distance.Text = string.format('[%d]', math.floor(dist))
-            d.Distance.Position = Vector2.new(x + w / 2, y + h + 2)
-        end
-
-        ::continue::
     end
 end
 
 function ESP:Enable()
+    if not self._available then
+        warn('[H3Y0 CH1LL] ESP недоступен: нет Drawing API')
+        return
+    end
     if self.Enabled then return end
     self.Enabled = true
     if not self._conn then
@@ -664,17 +837,16 @@ function ESP:Enable()
 end
 function ESP:Disable()
     self.Enabled = false
-    for player, _ in pairs(self._drawings) do
-        removeDrawingsForPlayer(player)
+    for p, d in pairs(self._drawings) do
+        destroyDrawings(d)
+        self._drawings[p] = nil
     end
 end
 
 -- ============================================================
--- СЕКЦИЯ 12: SKIN CHANGER (по юзернейму, только свой персонаж)
+-- СЕКЦИЯ 14: SKIN CHANGER
 -- ============================================================
-local SkinChanger = {
-    _busy = false,
-}
+local SkinChanger = { _busy = false }
 
 function SkinChanger:ApplyByUsername(username)
     if self._busy then
@@ -682,23 +854,21 @@ function SkinChanger:ApplyByUsername(username)
         return
     end
     if not username or username == '' then
-        warn('[H3Y0 CH1LL] Введи юзернейм')
+        warn('[H3Y0 CH1LL] Введи username')
         return
     end
     self._busy = true
     task.spawn(function()
-        -- 1) username -> userId
         local okId, userId = pcall(function()
             return Players:GetUserIdFromNameAsync(username)
         end)
         if not okId or not userId then
-            warn('[H3Y0 CH1LL] Не удалось найти юзера: ' .. tostring(username))
+            warn('[H3Y0 CH1LL] Юзер не найден: ' .. tostring(username))
             self._busy = false
             return
         end
-        print('[H3Y0 CH1LL] UserId найден: ' .. tostring(userId))
+        print('[H3Y0 CH1LL] UserId: ' .. tostring(userId))
 
-        -- 2) userId -> HumanoidDescription
         local okDesc, desc = pcall(function()
             return Players:GetHumanoidDescriptionFromUserId(userId)
         end)
@@ -708,11 +878,10 @@ function SkinChanger:ApplyByUsername(username)
             return
         end
 
-        -- 3) применить к своему персонажу
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChildOfClass('Humanoid')
         if not hum then
-            warn('[H3Y0 CH1LL] Нет персонажа/гуманоида')
+            warn('[H3Y0 CH1LL] Нет персонажа/Humanoid')
             self._busy = false
             return
         end
@@ -739,12 +908,13 @@ function SkinChanger:ResetToSelf()
         local hum = char and char:FindFirstChildOfClass('Humanoid')
         if hum then
             pcall(function() hum:ApplyDescriptionReset(desc) end)
+            print('[H3Y0 CH1LL] Скин сброшен на свой')
         end
     end
 end
 
 -- ============================================================
--- СЕКЦИЯ 13: СБОРКА МЕНЮ
+-- СЕКЦИЯ 15: СБОРКА МЕНЮ
 -- ============================================================
 
 -- ===== ВКЛАДКА MOVEMENT =====
@@ -753,78 +923,100 @@ local gbMove = AddGroupbox(TabMove, 'Left', 'Movement')
 local gbBhop = AddGroupbox(TabMove, 'Right', 'Bhop Tuning')
 
 AddToggle(gbMove, 'fly_enabled', {
-    Text = 'Fly', Default = false,
+    Text = 'Fly',
+    Default = false,
     Callback = function(v) if v then Fly:Enable() else Fly:Disable() end end,
 })
 AddSlider(gbMove, 'fly_speed', {
-    Text = 'Fly Speed', Min = 10, Max = 200, Default = 50,
+    Text = 'Fly Speed',
+    Min = 10, Max = 200, Default = 50,
     Callback = function(v) Fly.Speed = v end,
 })
 AddToggle(gbMove, 'speed_enabled', {
-    Text = 'Speed', Default = false,
+    Text = 'Speed',
+    Default = false,
     Callback = function(v) if v then Speed:Enable() else Speed:Disable() end end,
 })
 AddSlider(gbMove, 'speed_value', {
-    Text = 'Speed Value', Min = 16, Max = 300, Default = 32,
+    Text = 'Speed Value',
+    Min = 16, Max = 300, Default = 32,
     Callback = function(v) Speed._target = v end,
 })
 AddToggle(gbMove, 'noclip_enabled', {
-    Text = 'Noclip', Default = false,
+    Text = 'Noclip',
+    Default = false,
     Callback = function(v) if v then Noclip:Enable() else Noclip:Disable() end end,
 })
 AddToggle(gbMove, 'spin_enabled', {
-    Text = 'SpinBot', Default = false,
+    Text = 'SpinBot',
+    Default = false,
     Callback = function(v) if v then SpinBot:Enable() else SpinBot:Disable() end end,
 })
 AddSlider(gbMove, 'spin_speed', {
-    Text = 'Spin Speed', Min = 1, Max = 50, Default = 10,
+    Text = 'Spin Speed',
+    Min = 1, Max = 50, Default = 10,
     Callback = function(v) SpinBot.Speed = v end,
 })
 AddButton(gbMove, {
     Text = 'Stop All Movement',
     Func = function()
-        Fly:Disable(); Speed:Disable(); Bhop:Disable()
-        Noclip:Disable(); SpinBot:Disable()
+        Fly:Disable()
+        Speed:Disable()
+        Bhop:Disable()
+        Noclip:Disable()
+        SpinBot:Disable()
+        -- сброс UI toggle'ов, чтобы не висели в положении "on"
+        for _, id in ipairs({'fly_enabled','speed_enabled','noclip_enabled','spin_enabled','bhop_enabled'}) do
+            local t = Library.Toggles[id]
+            if t then t.SetValue(false) end
+        end
     end,
 })
 
--- ===== Bhop tuning =====
 AddToggle(gbBhop, 'bhop_enabled', {
-    Text = 'Bhop', Default = false,
+    Text = 'Bhop',
+    Default = false,
     Callback = function(v) if v then Bhop:Enable() else Bhop:Disable() end end,
 })
 AddSlider(gbBhop, 'bhop_gain', {
-    Text = 'Gain (разгон)', Min = 0, Max = 3, Default = 0.5,
+    Text = 'Gain (разгон)',
+    Min = 0, Max = 3, Default = 0.5,
     Callback = function(v) Bhop.Gain = v end,
 })
 AddSlider(gbBhop, 'bhop_friction', {
-    Text = 'Friction (сохранение)', Min = 0.5, Max = 1.0, Default = 0.98,
+    Text = 'Friction (сохранение)',
+    Min = 0.5, Max = 1.0, Default = 0.98,
     Callback = function(v) Bhop.Friction = v end,
 })
 AddSlider(gbBhop, 'bhop_maxspeed', {
-    Text = 'Max Speed', Min = 20, Max = 300, Default = 120,
+    Text = 'Max Speed',
+    Min = 20, Max = 300, Default = 120,
     Callback = function(v) Bhop.MaxSpeed = v end,
 })
 AddToggle(gbBhop, 'bhop_autojump', {
-    Text = 'Auto Jump (hold Space)', Default = true,
+    Text = 'Auto Jump (hold Space)',
+    Default = true,
     Callback = function(v) Bhop.AutoJump = v end,
 })
 AddToggle(gbBhop, 'bhop_preserve', {
-    Text = 'Preserve Momentum', Default = true,
+    Text = 'Preserve Momentum',
+    Default = true,
     Callback = function(v) Bhop.Preserve = v end,
 })
 
--- ===== ВКЛАДКА VISUALS (ESP) =====
+-- ===== ВКЛАДКА VISUALS =====
 local TabVisual = AddTab('Visuals')
-local gbEspToggle = AddGroupbox(TabVisual, 'Left', 'ESP Toggle')
+local gbEspToggle = AddGroupbox(TabVisual, 'Left', 'ESP')
 local gbEspParts = AddGroupbox(TabVisual, 'Right', 'ESP Elements')
 
 AddToggle(gbEspToggle, 'esp_enabled', {
-    Text = 'Enable ESP', Default = false,
+    Text = 'Enable ESP',
+    Default = false,
     Callback = function(v) if v then ESP:Enable() else ESP:Disable() end end,
 })
 AddSlider(gbEspToggle, 'esp_maxdist', {
-    Text = 'Max Distance', Min = 100, Max = 5000, Default = 1000,
+    Text = 'Max Distance',
+    Min = 100, Max = 5000, Default = 1000,
     Callback = function(v) ESP.MaxDistance = v end,
 })
 AddButton(gbEspToggle, {
@@ -836,19 +1028,23 @@ AddButton(gbEspToggle, {
 })
 
 AddToggle(gbEspParts, 'esp_box', {
-    Text = 'Box', Default = true,
+    Text = 'Box',
+    Default = true,
     Callback = function(v) ESP.Box = v end,
 })
 AddToggle(gbEspParts, 'esp_name', {
-    Text = 'Name', Default = true,
+    Text = 'Name',
+    Default = true,
     Callback = function(v) ESP.Name = v end,
 })
 AddToggle(gbEspParts, 'esp_health', {
-    Text = 'Health', Default = true,
+    Text = 'Health',
+    Default = true,
     Callback = function(v) ESP.Health = v end,
 })
 AddToggle(gbEspParts, 'esp_distance', {
-    Text = 'Distance', Default = true,
+    Text = 'Distance',
+    Default = true,
     Callback = function(v) ESP.Distance = v end,
 })
 
@@ -858,7 +1054,9 @@ local gbSkin = AddGroupbox(TabSkin, 'Left', 'Skin By Username')
 local gbSkinInfo = AddGroupbox(TabSkin, 'Right', 'Info')
 
 AddTextbox(gbSkin, 'skin_username', {
-    Text = 'Username', Placeholder = 'Roblox username', Default = '',
+    Text = 'Username',
+    Placeholder = 'Roblox username',
+    Default = '',
 })
 AddButton(gbSkin, {
     Text = 'Apply Skin',
@@ -872,27 +1070,31 @@ AddButton(gbSkin, {
     Func = function() SkinChanger:ResetToSelf() end,
 })
 
-CreateLabel({
-    Text = 'Применяется только к твоему персонажу.\nЧужой скин на себя по username.\nНа других игроков применить с клиента нельзя.\n\nВведи username → Apply Skin',
-    TextSize = 11,
-    TextColor3 = Color3.fromRGB(180, 180, 180),
-    Size = UDim2.new(1, 0, 0, 110),
-    TextWrapped = true,
-    TextYAlignment = Enum.TextYAlignment.Top,
-    Parent = gbSkinInfo.Container,
-})
+AddLabel(gbSkinInfo,
+    'Работает только на твоего персонажа.\n' ..
+    'Чужой скин по username — для СЕБЯ.\n' ..
+    'На других игроков с клиента применить нельзя.\n\n' ..
+    'Введи username -> Apply Skin'
+)
 
 -- ===== ВКЛАДКА SETTINGS =====
 local TabSettings = AddTab('Settings')
-local gbSettings = AddGroupbox(TabSettings, 'Left', 'Config')
+local gbSettings = AddGroupbox(TabSettings, 'Left', 'Misc')
 
 AddButton(gbSettings, {
     Text = 'Unload (Panic)',
     Func = function()
-        Fly:Disable(); Speed:Disable(); Bhop:Disable()
-        Noclip:Disable(); SpinBot:Disable(); ESP:Disable()
-        if Library.ScreenGui then Library.ScreenGui:Destroy() end
+        Fly:Disable()
+        Speed:Disable()
+        Bhop:Disable()
+        Noclip:Disable()
+        SpinBot:Disable()
+        ESP:Disable()
+        if Library.ScreenGui then
+            pcall(function() Library.ScreenGui:Destroy() end)
+        end
         control.status = 'unloaded'
+        if getgenv then getgenv()['H3Y0 CH1LL'] = nil end
     end,
 })
 AddButton(gbSettings, {
@@ -915,20 +1117,28 @@ AddButton(gbSettings, {
 })
 
 -- ============================================================
--- СЕКЦИЯ 14: ЗАПУСК
+-- СЕКЦИЯ 16: ЗАПУСК
 -- ============================================================
+
 -- Открываем первую вкладку
 if Tabs[1] then
     Tabs[1].Content.Visible = true
     Tabs[1].Btn.TextColor3 = Library.AccentColor
+    ActiveTab = Tabs[1]
 end
 
-control.status = 'loaded'
+-- Экспортируем наружу для отладки
 if getgenv then
     getgenv().H3Y0 = {
-        Fly = Fly, Speed = Speed, Bhop = Bhop, Noclip = Noclip,
-        SpinBot = SpinBot, ESP = ESP, SkinChanger = SkinChanger,
+        Fly = Fly,
+        Speed = Speed,
+        Bhop = Bhop,
+        Noclip = Noclip,
+        SpinBot = SpinBot,
+        ESP = ESP,
+        SkinChanger = SkinChanger,
     }
 end
 
-print('[H3Y0 CH1LL] Hub v2 loaded. RightControl/Insert to toggle.')
+control.status = 'loaded'
+print('[H3Y0 CH1LL] Hub v3 loaded. RightControl/Insert to toggle.')
